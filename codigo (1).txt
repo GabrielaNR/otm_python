@@ -1,0 +1,149 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from tkinter import *
+from tkinter import messagebox
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+graph_frame = None
+
+# Função para calcular a função objetivo
+def f(x, y):
+    return eval(func_str, {"x": x, "y": y, "np": np})
+
+# Função para calcular a função penalizada
+def phi(x, y, mu):
+    for constraint in constraint_list:
+        if not eval(constraint, {"x": x, "y": y, "np": np}):
+            return np.inf
+    penalty = 0
+    for constraint in constraint_list:
+        if '>' in constraint:
+            side = constraint.split('>')
+            g = f"({side[0]}) - ({side[1]})"
+            val = eval(g, {"x": x, "y": y, "np": np})
+            penalty += np.log(val)
+        elif '<' in constraint:
+            side = constraint.split('<')
+            g = f"({side[1]}) - ({side[0]})"
+            val = eval(g, {"x": x, "y": y, "np": np})
+            penalty += np.log(val)
+    return f(x, y) - mu * penalty
+
+# Função para calcular o gradiente
+def grad_phi(x0, mu):
+    x, y = x0
+    h = 1e-5
+    dfdx = (phi(x + h, y, mu) - phi(x - h, y, mu)) / (2 * h)
+    dfdy = (phi(x, y + h, mu) - phi(x, y - h, mu)) / (2 * h)
+    return np.array([dfdx, dfdy])
+
+# Função para rodar o algoritmo
+def run_algorithm():
+    global func_str, constraint_list
+    
+    # Pegando os inputs dos campos
+    func_str = func_entry.get()
+    constraints = constraints_entry.get()
+    
+    # Convertendo as restrições em lista
+    constraint_list = [c.strip() for c in constraints.split(',')]
+    
+    # Inicializando os parâmetros
+    x0 = np.array([0.5, 0.5])
+    mu = 1.0
+    epsilon = 1e-5
+    alpha = 0.01
+    trajectory = [x0.copy()]
+
+    # Método de barreiras
+    while mu > epsilon:
+        for _ in range(50):
+            grad = grad_phi(x0, mu)
+            if np.linalg.norm(grad) < 1e-4:
+                break
+            x0 -= alpha * grad
+            trajectory.append(x0.copy())
+        mu /= 10
+    trajectory = np.array(trajectory)
+    plot_graphs(trajectory) 
+
+
+# Função para plotar os gráficos
+def plot_graphs(trajectory):
+    global graph_frame
+
+    # Se já existe um frame de gráfico, destrói ele
+    if graph_frame is not None:
+        graph_frame.destroy()
+
+    # Cria um novo frame
+    graph_frame = Frame(window)
+    graph_frame.pack(pady=10)
+
+    # Gerando os valores para as curvas de nível e 3D
+    x_vals = np.linspace(0.01, 3.99, 100)
+    y_vals = np.linspace(0.01, 3.99, 100)
+    X, Y = np.meshgrid(x_vals, y_vals)
+    Z = f(X, Y)
+
+    # ======= Gráfico de Curvas de Nível =======
+    fig1, ax1 = plt.subplots(figsize=(5, 4))
+    contours = ax1.contour(X, Y, Z, levels=30, cmap='viridis')
+    ax1.clabel(contours, inline=True, fontsize=8)
+    ax1.plot(trajectory[:, 0], trajectory[:, 1], marker='o', color='blue', label='Soluções Iterativas')
+    ax1.set_xlabel('$x$')
+    ax1.set_ylabel('$y$')
+    ax1.set_title('Curvas de Nível')
+    ax1.legend()
+    ax1.grid(True)
+
+    canvas1 = FigureCanvasTkAgg(fig1, master=graph_frame)
+    canvas1.draw()
+    canvas1.get_tk_widget().pack(side=LEFT, padx=10)
+
+    # ======= Gráfico 3D =======
+    fig2 = plt.figure(figsize=(5, 4))
+    ax2 = fig2.add_subplot(111, projection='3d')
+    ax2.plot_surface(X, Y, Z, cmap='viridis', alpha=0.8)
+    ax2.plot(trajectory[:, 0], trajectory[:, 1], f(trajectory[:, 0], trajectory[:, 1]), color='red', marker='o', label='Trajetória')
+    ax2.set_xlabel('$x$')
+    ax2.set_ylabel('$y$')
+    ax2.set_zlabel('$f(x, y)$')
+    ax2.set_title('Gráfico 3D')
+    ax2.legend()
+
+    canvas2 = FigureCanvasTkAgg(fig2, master=graph_frame)
+    canvas2.draw()
+    canvas2.get_tk_widget().pack(side=RIGHT, padx=10)
+    
+
+# Criando a janela principal
+window = Tk()
+window.title("Otimização - Método de Barreiras")
+window.geometry("1000x800")
+
+# Labels e entradas
+Label(window, text="Função Objetivo (em termos de x e y):").pack(pady=5)
+func_entry = Entry(window, width=50)
+func_entry.pack(pady=5)
+
+Label(window, text="Restrições (ex: 'x > 0, y > 0, x + y < 4'):").pack(pady=5)
+constraints_entry = Entry(window, width=50)
+constraints_entry.pack(pady=5)
+
+# Botão para rodar o algoritmo
+run_button = Button(window, text="Rodar Algoritmo", command=run_algorithm)
+run_button.pack(pady=20)
+
+
+
+# Iniciar a interface
+window.mainloop()
+
+  
+
+terminal:
+jupyter nbconvert --to python Untitled6.ipynb
+
+pyinstaller --onefile --windowed Untitled6.py
